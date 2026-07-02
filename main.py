@@ -7,7 +7,7 @@ from command.receive_command import RemoteCommandHandler as ReceiverHandler
 from command.send_command import RemoteCommandHandler as SenderHandler
 
 
-HOST = "http://localhost:8000"
+HOST = "https://malware-signal.vercel.app/"
 ROOM = "testroom"
 
 

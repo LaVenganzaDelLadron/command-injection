@@ -2,7 +2,6 @@ import asyncio
 import json
 import logging
 import subprocess
-import getpass
 import uuid
 
 logger = logging.getLogger("send_command")

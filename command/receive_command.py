@@ -47,42 +47,17 @@ class RemoteCommandHandler:
             await self._send_error(None, None, "Invalid signaling message.")
             return
 
-        sender = message.get("sender")
-        command = message.get("command")
-        request_id = message.get("request_id")
-
-        if not isinstance(command, str) or not command.strip():
-            logger.warning("Rejecting invalid remote command from %s: %r", sender, message)
-            await self._send_error(sender, request_id, "Invalid remote command request.")
+        if message.get("type") == "remote-command":
+            logger.debug("Dispatching direct remote-command request: %s", message)
+            await self._process_command_request(message)
             return
 
-        logger.info("Executing command from %s: %s", sender, command)
-        try:
-            completed = subprocess.run(
-                command,
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-        except subprocess.TimeoutExpired:
-            logger.error("Command timed out for %s: %s", sender, command)
-            await self._send_error(sender, request_id, "Command timed out.")
-            return
-        except Exception as exc:  # pragma: no cover - defensive fallback
-            logger.exception("Command execution failed for %s: %s", sender, command)
-            await self._send_error(sender, request_id, f"Command failed: {exc}")
+        if message.get("type") == "offer":
+            logger.debug("Dispatching remote command offer: %s", message)
+            await self._handle_offer(message)
             return
 
-        output = completed.stdout + completed.stderr
-        if not output:
-            output = "Command executed successfully."
-
-        logger.info("Command finished for %s with exit code %s", sender, completed.returncode)
-        if completed.returncode == 0:
-            await self._send_answer(sender, request_id, "success", output=output)
-        else:
-            await self._send_answer(sender, request_id, "error", error=output or "Command failed.")
+        logger.debug("Ignoring unsupported signaling message type: %s", message.get("type"))
 
     async def _handle_offer(self, message):
         sdp = message.get("sdp")
@@ -100,16 +75,32 @@ class RemoteCommandHandler:
             logger.warning("Ignoring unsupported offer payload type: %s", payload.get("type"))
             return
 
+        request = {
+            "sender": message.get("sender"),
+            "command": payload.get("command"),
+            "request_id": payload.get("request_id"),
+        }
+        await self._process_command_request(request)
+
+    async def _process_command_request(self, message):
         sender = message.get("sender")
-        command = payload.get("command")
-        request_id = payload.get("request_id")
+        command = message.get("command")
+        request_id = message.get("request_id")
 
         if not isinstance(command, str) or not command.strip():
-            logger.warning("Rejecting invalid remote command offer from %s: %r", sender, payload)
-            await self._send_answer(sender, request_id, "error", error="Invalid remote command request.")
+            logger.warning("Rejecting invalid remote command from %s: %r", sender, message)
+            await self._send_error(sender, request_id, "Invalid remote command request.")
             return
 
-        logger.info("Executing command offer from %s: %s", sender, command)
+        logger.info("Executing command from %s: %s", sender, command)
+        status, output, error = await self._execute_command(sender, command)
+
+        if status == "success":
+            await self._send_answer(sender, request_id, status, output=output)
+        else:
+            await self._send_answer(sender, request_id, status, error=error)
+
+    async def _execute_command(self, sender, command):
         try:
             completed = subprocess.run(
                 command,
@@ -120,12 +111,10 @@ class RemoteCommandHandler:
             )
         except subprocess.TimeoutExpired:
             logger.error("Command timed out for %s: %s", sender, command)
-            await self._send_answer(sender, request_id, "error", error="Command timed out.")
-            return
+            return "error", None, "Command timed out."
         except Exception as exc:  # pragma: no cover - defensive fallback
             logger.exception("Command execution failed for %s: %s", sender, command)
-            await self._send_answer(sender, request_id, "error", error=f"Command failed: {exc}")
-            return
+            return "error", None, f"Command failed: {exc}"
 
         output = completed.stdout + completed.stderr
         if not output:
@@ -133,9 +122,8 @@ class RemoteCommandHandler:
 
         logger.info("Command finished for %s with exit code %s", sender, completed.returncode)
         if completed.returncode == 0:
-            await self._send_answer(sender, request_id, "success", output=output)
-        else:
-            await self._send_answer(sender, request_id, "error", error=output or "Command failed.")
+            return "success", output, None
+        return "error", None, output or "Command failed."
 
     async def _send_answer(self, target, request_id, status, output=None, error=None):
         if self.signal is None:
