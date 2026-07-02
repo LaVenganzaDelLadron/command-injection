@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 import websockets
 
 
-logger = logging.getLogger("command-injection")
+logger = logging.getLogger("command_injection_client")
 if not logger.handlers:
     handler = logging.StreamHandler()
     handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
@@ -39,7 +39,7 @@ class SignalClient:
         self.host = host
 
         parsed = urlparse(host)
-        if parsed.scheme in {"http","https"}:
+        if parsed.scheme in {"http","https","ws","wss"}:
             scheme = "wss" if parsed.scheme == "https" else "ws"
             netloc = parsed.netloc or parsed.path
             self.url = f"{scheme}://{netloc}/ws/{room}/{client_id}"
