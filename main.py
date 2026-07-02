@@ -2,12 +2,12 @@
 import sys
 import asyncio
 
-from signal.receive_signal import SignalClient
-from signal.receive_command import RemoteCommandHandler as ReceiverHandler
+from signaling.receive_signal import SignalClient
+from command.receive_command import RemoteCommandHandler as ReceiverHandler
 from command.send_command import RemoteCommandHandler as SenderHandler
 
 
-HOST = "ws://localhost:8000"
+HOST = "http//localhost:8000"
 ROOM = "testroom"
 
 
@@ -32,14 +32,20 @@ async def connect_mode(client_id, target, command):
 
     sender = SenderHandler(signal)
 
-    await sender.send_command(
+    result = await sender.send_command(
         target=target,
-        command=command
+        command=command,
+        wait_for_result=True,
+        timeout=15,
     )
 
-    print("[+] Command sent")
+    if result is None:
+        print("[+] Command sent")
+    elif result.get("status") == "success":
+        print(result.get("output", "Command executed successfully"))
+    else:
+        print("ERROR:", result.get("error", "Unknown error"))
 
-    await asyncio.sleep(2)
     await signal.close()
 
 

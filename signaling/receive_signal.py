@@ -1,4 +1,4 @@
-# signal/receive_signal.py
+# signaling/receive_signal.py
 import asyncio
 import inspect
 import json
@@ -100,6 +100,7 @@ class SignalClient:
     async def send(self, packet):
         payload = dict(packet)
         payload.setdefault("sender", self.client_id)
+
         logger.debug("Sending signaling payload: %s", payload)
 
         try:

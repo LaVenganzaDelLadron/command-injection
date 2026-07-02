@@ -1,4 +1,4 @@
-# signal/send_signal.py
+# signaling/send_signal.py
 import asyncio
 import json
 import logging
